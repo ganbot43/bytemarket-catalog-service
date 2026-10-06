@@ -46,6 +46,25 @@ public interface IReviewRepository extends JpaRepository<Review, Integer> {
     Page<Review> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
     Page<Review> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    /**
+     * Listado del panel con estado y texto opcionales.
+     *
+     * productIds nunca llega vacío: el controlador manda un id imposible
+     * cuando ningún producto coincide, porque "IN ()" no es SQL válido.
+     */
+    @Query("""
+            SELECT r FROM Review r
+            WHERE (:status IS NULL OR r.status = :status)
+              AND (:patron IS NULL
+                   OR LOWER(COALESCE(r.comment, '')) LIKE :patron
+                   OR r.productId IN :productIds)
+            ORDER BY r.createdAt DESC
+            """)
+    Page<Review> buscar(@Param("status") String status,
+                        @Param("patron") String patron,
+                        @Param("productIds") java.util.List<Integer> productIds,
+                        Pageable pageable);
+
     @Query("SELECT COUNT(r) FROM Review r WHERE r.productId = :productId AND r.status = 'approved'")
     long countApprovedByProductId(@Param("productId") Integer productId);
 }

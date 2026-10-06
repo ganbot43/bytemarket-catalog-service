@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
+import com.bytemarket.catalog.repository.ProductoSpecification;
 
 import java.util.HashMap;
 import java.util.List;
@@ -43,9 +45,28 @@ public class ApiAdminProductController {
     @Autowired
     private IInventoryMovementRepository inventoryMovementRepository;
 
+    /**
+     * Listado del panel.
+     *
+     * Reutiliza ProductoSpecification, la misma que usa la tienda, pero con
+     * isActive = null salvo que se pida: el panel tiene que ver también los
+     * productos desactivados, que es justo lo que la tienda esconde.
+     */
     @GetMapping
-    public Map<String, Object> getAll(@RequestParam(defaultValue = "10") int limit, @RequestParam(defaultValue = "0") int offset) {
-        Page<Product> page = productRepository.findAll(PageRequest.of(offset / limit, limit));
+    public Map<String, Object> getAll(
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Integer isActive) {
+
+        // limit 0 reventaba con division by zero al calcular la página.
+        int tamano = Math.max(1, limit);
+
+        Specification<Product> filtros = ProductoSpecification.conFiltros(
+                null, null, categoryId, null, q, null, null, isActive, null, null);
+
+        Page<Product> page = productRepository.findAll(filtros, PageRequest.of(offset / tamano, tamano));
         List<Map<String, Object>> data = page.getContent().stream().map(p -> {
             Map<String, Object> m = new HashMap<>();
             m.put("id", p.getId());

@@ -30,13 +30,27 @@ public class ApiAdminReviewController {
     @GetMapping
     public Map<String, Object> list(@RequestParam(defaultValue = "20") int limit,
                                     @RequestParam(defaultValue = "0") int offset,
-                                    @RequestParam(required = false) String status) {
+                                    @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String q) {
         int tamano = Math.max(1, limit);
         Pageable pagina = PageRequest.of(offset / tamano, tamano);
 
-        Page<Review> page = (status == null || status.isBlank())
-                ? reviewRepository.findAllByOrderByCreatedAtDesc(pagina)
-                : reviewRepository.findByStatusOrderByCreatedAtDesc(status, pagina);
+        String estado = (status == null || status.isBlank()) ? null : status;
+        String texto = (q == null || q.isBlank()) ? null : q.trim().toLowerCase();
+
+        Page<Review> page;
+        if (texto == null) {
+            page = estado == null
+                    ? reviewRepository.findAllByOrderByCreatedAtDesc(pagina)
+                    : reviewRepository.findByStatusOrderByCreatedAtDesc(estado, pagina);
+        } else {
+            String patron = "%" + texto + "%";
+            // Se busca en el comentario y en el nombre del producto: el admin
+            // normalmente recuerda qué producto era, no qué escribió el cliente.
+            List<Integer> ids = productRepository.findIdsByNombreLike(patron);
+            if (ids.isEmpty()) ids = List.of(-1); // "IN ()" no es SQL válido
+            page = reviewRepository.buscar(estado, patron, ids, pagina);
+        }
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("data", page.getContent().stream().map(this::dto).toList());

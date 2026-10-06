@@ -22,6 +22,11 @@ public interface IProductRepository extends JpaRepository<Product, Integer>, Jpa
     @EntityGraph(attributePaths = {"category", "images"})
     Optional<Product> findBySlug(String slug);
 
+    /** Ids cuyo nombre coincide, para cruzar con tablas que guardan el
+        product_id suelto (Review no tiene relación con Product). */
+    @Query("SELECT p.id FROM Product p WHERE LOWER(p.name) LIKE :patron")
+    List<Integer> findIdsByNombreLike(@Param("patron") String patron);
+
     @EntityGraph(attributePaths = {"category", "images"})
     @Query("SELECT p FROM Product p LEFT JOIN p.category c WHERE p.isActive = :isActive AND (c IS NULL OR c.isActive = 1)")
     Page<Product> findByIsActive(@Param("isActive") Integer isActive, Pageable pageable);
