@@ -16,6 +16,11 @@ public interface IInventoryMovementRepository extends JpaRepository<InventoryMov
     /** Para el backfill: evita duplicar el movimiento de un pedido ya registrado. */
     boolean existsByRelatedOrderIdAndProductId(Long relatedOrderId, Integer productId);
 
+    /** Idempotencia del descuento de stock: distingue la salida por venta de
+        la entrada por cancelación del mismo pedido. */
+    boolean existsByRelatedOrderIdAndProductIdAndMovementType(
+            Long relatedOrderId, Integer productId, String movementType);
+
     /** Un producto con kardex no se borra: se desactiva, para no perder el historial. */
     boolean existsByProductId(Integer productId);
 }

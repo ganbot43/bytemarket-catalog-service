@@ -27,6 +27,9 @@ public class ApiInternalProductController {
     private IProductRepository productRepository;
 
     @Autowired
+    private com.bytemarket.catalog.service.StockService stockService;
+
+    @Autowired
     private IInventoryMovementRepository inventoryMovementRepository;
 
     /**

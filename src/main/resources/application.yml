@@ -37,6 +37,17 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    # Reintentos del consumidor ante fallos transitorios. Agotados, el
+    # mensaje va a la cola de fallidos en vez de reencolarse sin fin y
+    # bloquear a los demás.
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 2s
+          max-attempts: 4
+          multiplier: 2
+        default-requeue-rejected: false
   kafka:
     bootstrap-servers: ${KAFKA_SERVERS:localhost:9094}
     consumer:
@@ -65,3 +76,20 @@ aws:
   s3:
     bucket: ${S3_BUCKET:}
     root-prefix: ${S3_ROOT_PREFIX:bytemarket}
+
+# ── Sonda de salud ───────────────────────────────────────────
+# Solo se expone "health": los demás endpoints del actuator (env, beans,
+# mappings) revelan configuración interna y no hacen falta aquí.
+# Lo consulta el healthcheck de Docker, que así espera a que el servicio
+# esté REALMENTE listo —base de datos incluida— y no solo a que el puerto
+# responda.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
