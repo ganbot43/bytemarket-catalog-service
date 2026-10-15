@@ -6,7 +6,17 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "reviews")
+@Table(name = "reviews", indexes = {
+        // La ficha de producto pide siempre las aprobadas de UN producto, y
+        // el panel filtra por estado. Sin estos índices MySQL recorre la
+        // tabla entera en cada visita a una ficha: con dos reseñas da igual,
+        // con miles la ficha se arrastra.
+        @Index(name = "idx_reviews_producto_estado", columnList = "product_id, status"),
+        @Index(name = "idx_reviews_estado_fecha", columnList = "status, created_at"),
+        // existsByUserIdAndProductId, que impide la segunda reseña del mismo
+        // cliente sobre el mismo producto.
+        @Index(name = "idx_reviews_usuario_producto", columnList = "user_id, product_id")
+})
 public class Review {
 
     @Id
