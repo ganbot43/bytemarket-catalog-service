@@ -1,9 +1,9 @@
 package com.bytemarket.catalog.controller.api;
 
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Banners;
 import com.bytemarket.catalog.repository.IBannerRepository;
 import com.bytemarket.catalog.service.S3Service;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,13 +14,12 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/banners")
+@RequiredArgsConstructor
 public class ApiBannerController {
 
-    @Autowired
-    private IBannerRepository bannerRepository;
+    private final IBannerRepository bannerRepository;
 
-    @Autowired
-    private S3Service s3Service;
+    private final S3Service s3Service;
 
     @GetMapping
     public Map<String, Object> getBanners() {

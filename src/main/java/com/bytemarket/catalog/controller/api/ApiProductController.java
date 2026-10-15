@@ -1,8 +1,9 @@
 package com.bytemarket.catalog.controller.api;
 
+import com.bytemarket.catalog.service.ProductPresenter;
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Product;
 import com.bytemarket.catalog.service.CatalogoService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,13 +23,12 @@ import com.bytemarket.catalog.repository.ProductoSpecification;
 
 @RestController
 @RequestMapping("/api/products")
+@RequiredArgsConstructor
 public class ApiProductController {
 
-    @Autowired
-    private CatalogoService catalogoService;
+    private final CatalogoService catalogoService;
 
-    @Autowired
-    private com.bytemarket.catalog.service.ProductPresenter productPresenter;
+    private final ProductPresenter productPresenter;
 
     @GetMapping("")
     public ResponseEntity<Map<String, Object>> obtenerCatalogoProductos(

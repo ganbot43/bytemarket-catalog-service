@@ -1,11 +1,12 @@
 package com.bytemarket.catalog.controller.api;
 
+import com.bytemarket.catalog.service.S3Service;
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Category;
 import com.bytemarket.catalog.model.Subcategory;
 import com.bytemarket.catalog.repository.ICategoryRepository;
 import com.bytemarket.catalog.repository.ISubcategoryRepository;
 import com.bytemarket.catalog.repository.IProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,19 +19,16 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/categories")
+@RequiredArgsConstructor
 public class ApiCategoryController {
 
-    @Autowired
-    private ICategoryRepository categoryRepository;
+    private final ICategoryRepository categoryRepository;
 
-    @Autowired
-    private ISubcategoryRepository subcategoryRepository;
+    private final ISubcategoryRepository subcategoryRepository;
 
-    @Autowired
-    private IProductRepository productRepository;
+    private final IProductRepository productRepository;
 
-    @Autowired
-    private com.bytemarket.catalog.service.S3Service s3Service;
+    private final S3Service s3Service;
 
     @GetMapping
     public Map<String, Object> getCategories(@RequestParam(value = "active", required = false) Boolean active) {

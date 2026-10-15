@@ -1,10 +1,10 @@
 package com.bytemarket.catalog.service;
 
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Category;
 import com.bytemarket.catalog.model.Product;
 import com.bytemarket.catalog.repository.ICategoryRepository;
 import com.bytemarket.catalog.repository.IProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,13 +14,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 @Service
+@RequiredArgsConstructor
 public class CatalogoService {
 
-    @Autowired
-    private IProductRepository productRepository;
+    private final IProductRepository productRepository;
 
-    @Autowired
-    private ICategoryRepository categoryRepository;
+    private final ICategoryRepository categoryRepository;
 
     public List<Product> listarNuevosLanzamientos() {
         return productRepository.findByNuevoLanzamientoAndIsActive(1, 1);

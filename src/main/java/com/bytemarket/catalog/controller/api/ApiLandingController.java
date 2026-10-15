@@ -1,8 +1,9 @@
 package com.bytemarket.catalog.controller.api;
 
+import com.bytemarket.catalog.service.ProductPresenter;
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Product;
 import com.bytemarket.catalog.repository.IProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,13 +16,12 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/landing")
+@RequiredArgsConstructor
 public class ApiLandingController {
 
-    @Autowired
-    private IProductRepository productRepository;
+    private final IProductRepository productRepository;
 
-    @Autowired
-    private com.bytemarket.catalog.service.ProductPresenter productPresenter;
+    private final ProductPresenter productPresenter;
 
     // Antes se devolvían las entidades crudas: las imágenes salían con la URL
     // de S3 sin firmar (403 en el navegador) y la tarjeta recibía campos

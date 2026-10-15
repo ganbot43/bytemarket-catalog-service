@@ -1,11 +1,11 @@
 package com.bytemarket.catalog.controller.api.admin;
 
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Subcategory;
 import com.bytemarket.catalog.model.Category;
 import com.bytemarket.catalog.repository.ISubcategoryRepository;
 import com.bytemarket.catalog.repository.ICategoryRepository;
 import com.bytemarket.catalog.service.SlugUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,13 +16,12 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/subcategories")
+@RequiredArgsConstructor
 public class ApiAdminSubcategoryController {
 
-    @Autowired
-    private ISubcategoryRepository subcategoryRepository;
+    private final ISubcategoryRepository subcategoryRepository;
     
-    @Autowired
-    private ICategoryRepository categoryRepository;
+    private final ICategoryRepository categoryRepository;
 
     @GetMapping
     public Map<String, Object> getAll() {

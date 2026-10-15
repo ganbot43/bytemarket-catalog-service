@@ -1,8 +1,9 @@
 package com.bytemarket.catalog.controller.api.admin;
 
+import com.bytemarket.catalog.service.S3Service;
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Banners;
 import com.bytemarket.catalog.repository.IBannerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,13 +16,12 @@ import java.util.Map;
 /** CRUD de los banners de la portada. */
 @RestController
 @RequestMapping("/api/admin/banners")
+@RequiredArgsConstructor
 public class ApiAdminBannerController {
 
-    @Autowired
-    private IBannerRepository bannerRepository;
+    private final IBannerRepository bannerRepository;
 
-    @Autowired
-    private com.bytemarket.catalog.service.S3Service s3Service;
+    private final S3Service s3Service;
 
     @GetMapping
     public Map<String, Object> list() {

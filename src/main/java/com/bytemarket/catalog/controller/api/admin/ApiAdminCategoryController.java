@@ -1,9 +1,10 @@
 package com.bytemarket.catalog.controller.api.admin;
 
+import com.bytemarket.catalog.service.S3Service;
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Category;
 import com.bytemarket.catalog.repository.ICategoryRepository;
 import com.bytemarket.catalog.service.SlugUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,13 +15,12 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/categories")
+@RequiredArgsConstructor
 public class ApiAdminCategoryController {
 
-    @Autowired
-    private ICategoryRepository categoryRepository;
+    private final ICategoryRepository categoryRepository;
 
-    @Autowired
-    private com.bytemarket.catalog.service.S3Service s3Service;
+    private final S3Service s3Service;
 
     @GetMapping
     public Map<String, Object> getAll() {

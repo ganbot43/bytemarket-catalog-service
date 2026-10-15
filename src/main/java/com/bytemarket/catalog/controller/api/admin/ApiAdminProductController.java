@@ -1,5 +1,8 @@
 package com.bytemarket.catalog.controller.api.admin;
 
+import com.bytemarket.catalog.service.S3Service;
+import com.bytemarket.catalog.service.ProductPresenter;
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.Product;
 import com.bytemarket.catalog.model.Category;
 import com.bytemarket.catalog.model.ProductImage;
@@ -8,7 +11,6 @@ import com.bytemarket.catalog.repository.ICategoryRepository;
 import com.bytemarket.catalog.repository.IProductImageRepository;
 import com.bytemarket.catalog.repository.IInventoryMovementRepository;
 import com.bytemarket.catalog.service.SlugUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,25 +27,20 @@ import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/admin/products")
+@RequiredArgsConstructor
 public class ApiAdminProductController {
 
-    @Autowired
-    private IProductRepository productRepository;
+    private final IProductRepository productRepository;
     
-    @Autowired
-    private ICategoryRepository categoryRepository;
+    private final ICategoryRepository categoryRepository;
 
-    @Autowired
-    private IProductImageRepository productImageRepository;
+    private final IProductImageRepository productImageRepository;
 
-    @Autowired
-    private com.bytemarket.catalog.service.ProductPresenter productPresenter;
+    private final ProductPresenter productPresenter;
 
-    @Autowired
-    private com.bytemarket.catalog.service.S3Service s3Service;
+    private final S3Service s3Service;
 
-    @Autowired
-    private IInventoryMovementRepository inventoryMovementRepository;
+    private final IInventoryMovementRepository inventoryMovementRepository;
 
     /**
      * Listado del panel.

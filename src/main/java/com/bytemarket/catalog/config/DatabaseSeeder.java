@@ -1,8 +1,8 @@
 package com.bytemarket.catalog.config;
 
+import lombok.RequiredArgsConstructor;
 import com.bytemarket.catalog.model.*;
 import com.bytemarket.catalog.repository.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -10,22 +10,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class DatabaseSeeder implements CommandLineRunner {
 
-    @Autowired
-    private ICategoryRepository categoryRepository;
+    private final ICategoryRepository categoryRepository;
 
-    @Autowired
-    private ISubcategoryRepository subcategoryRepository;
+    private final ISubcategoryRepository subcategoryRepository;
 
-    @Autowired
-    private IProductRepository productRepository;
+    private final IProductRepository productRepository;
 
-    @Autowired
-    private IProductImageRepository productImageRepository;
+    private final IProductImageRepository productImageRepository;
 
-    @Autowired
-    private IBannerRepository bannerRepository;
+    private final IBannerRepository bannerRepository;
 
     @Override
     public void run(String... args) throws Exception {
