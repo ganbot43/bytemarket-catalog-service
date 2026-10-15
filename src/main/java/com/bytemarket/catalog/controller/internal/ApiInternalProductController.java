@@ -4,6 +4,7 @@ import com.bytemarket.catalog.model.InventoryMovement;
 import com.bytemarket.catalog.model.Product;
 import com.bytemarket.catalog.repository.IInventoryMovementRepository;
 import com.bytemarket.catalog.repository.IProductRepository;
+import com.bytemarket.catalog.service.StockService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,7 @@ public class ApiInternalProductController {
     private IProductRepository productRepository;
 
     @Autowired
-    private com.bytemarket.catalog.service.StockService stockService;
+    private StockService stockService;
 
     @Autowired
     private IInventoryMovementRepository inventoryMovementRepository;
@@ -49,80 +50,27 @@ public class ApiInternalProductController {
     }
 
     /**
-     * Descuenta stock y deja el movimiento de inventario asociado al pedido.
-     * Solo toca los productos con track_stock activo.
+     * Descuenta stock por una venta y deja su movimiento de inventario.
+     *
+     * La lógica vive en StockService porque esta ruta ya no es la única: el
+     * camino normal es la cola (StockListener). Al delegar, esta entrada
+     * hereda la idempotencia del servicio —repetir la llamada con el mismo
+     * pedido ya no descuenta dos veces— y las dos rutas no pueden volver a
+     * divergir.
      */
     @PostMapping("/stock-decrement")
-    @Transactional
     public ResponseEntity<?> decrementStock(@RequestBody Map<String, Object> body) {
-        Long orderId = body.get("orderId") == null ? null : Long.valueOf(body.get("orderId").toString());
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) body.get("items");
-        if (items == null) items = List.of();
-
-        int applied = 0;
-        for (Map<String, Object> item : items) {
-            Integer productId = item.get("productId") == null ? null : Integer.valueOf(item.get("productId").toString());
-            int quantity = item.get("quantity") == null ? 0 : Integer.parseInt(item.get("quantity").toString());
-            if (productId == null || quantity <= 0) continue;
-
-            Product p = productRepository.findById(productId).orElse(null);
-            if (p == null || p.getTrackStock() == null || p.getTrackStock() != 1) continue;
-
-            int actual = p.getStock() == null ? 0 : p.getStock();
-            p.setStock(Math.max(0, actual - quantity));
-            productRepository.save(p);
-
-            InventoryMovement mov = new InventoryMovement();
-            mov.setProduct(p);
-            mov.setMovementType("exit");
-            mov.setQuantity(quantity);
-            mov.setDelta(-quantity);
-            mov.setReason("Venta");
-            mov.setRelatedOrderId(orderId);
-            inventoryMovementRepository.save(mov);
-            applied++;
-        }
-
-        return ResponseEntity.ok(Map.of("applied", applied));
+        return ResponseEntity.ok(Map.of("applied", stockService.descontar(orderId(body), items(body))));
     }
 
     /**
      * Devuelve stock a los productos de un pedido anulado, con su movimiento
-     * de entrada para que el inventario siga siendo auditable.
+     * de entrada para que el inventario siga siendo auditable. Delega en
+     * StockService por el mismo motivo que el descuento.
      */
     @PostMapping("/stock-restore")
-    @Transactional
     public ResponseEntity<?> restoreStock(@RequestBody Map<String, Object> body) {
-        Long orderId = body.get("orderId") == null ? null : Long.valueOf(body.get("orderId").toString());
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) body.get("items");
-        if (items == null) items = List.of();
-
-        int applied = 0;
-        for (Map<String, Object> item : items) {
-            Integer productId = item.get("productId") == null ? null : Integer.valueOf(item.get("productId").toString());
-            int quantity = item.get("quantity") == null ? 0 : Integer.parseInt(item.get("quantity").toString());
-            if (productId == null || quantity <= 0) continue;
-
-            Product p = productRepository.findById(productId).orElse(null);
-            if (p == null || p.getTrackStock() == null || p.getTrackStock() != 1) continue;
-
-            p.setStock((p.getStock() == null ? 0 : p.getStock()) + quantity);
-            productRepository.save(p);
-
-            InventoryMovement mov = new InventoryMovement();
-            mov.setProduct(p);
-            mov.setMovementType("entry");
-            mov.setQuantity(quantity);
-            mov.setDelta(quantity);
-            mov.setReason("Devolución por pedido cancelado");
-            mov.setRelatedOrderId(orderId);
-            inventoryMovementRepository.save(mov);
-            applied++;
-        }
-
-        return ResponseEntity.ok(Map.of("applied", applied));
+        return ResponseEntity.ok(Map.of("applied", stockService.devolver(orderId(body), items(body))));
     }
 
     /** Productos activos bajo el umbral de stock, para las alertas del panel. */
@@ -192,6 +140,17 @@ public class ApiInternalProductController {
             out.add(m);
         }
         return out;
+    }
+
+    private static Long orderId(Map<String, Object> body) {
+        Object v = body.get("orderId");
+        return v == null ? null : Long.valueOf(v.toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> items(Map<String, Object> body) {
+        Object raw = body.get("items");
+        return raw instanceof List ? (List<Map<String, Object>>) raw : List.of();
     }
 
     private Map<String, Object> snapshot(Product p) {
