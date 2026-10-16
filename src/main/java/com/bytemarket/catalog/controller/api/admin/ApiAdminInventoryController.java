@@ -29,6 +29,68 @@ public class ApiAdminInventoryController {
 
     private final IProductRepository productRepository;
 
+    /**
+     * Existencias actuales, que es lo que faltaba en esta pantalla.
+     *
+     * El inventario solo mostraba MOVIMIENTOS: respondía "¿qué pasó?" pero
+     * no "¿qué tengo que reponer?", y para saberlo había que ir a Productos
+     * y mirar uno por uno. Esto lista el stock de cada producto ordenado de
+     * menor a mayor, con el filtro de solo-bajos y el resumen de cuántos
+     * faltan.
+     *
+     * Solo salen los que llevan control de stock: para el resto la cifra no
+     * significaría nada.
+     */
+    @GetMapping("/stock")
+    public Map<String, Object> stock(@RequestParam(defaultValue = "20") int limit,
+                                     @RequestParam(defaultValue = "0") int offset,
+                                     @RequestParam(required = false) String q,
+                                     @RequestParam(defaultValue = "10") int threshold,
+                                     @RequestParam(defaultValue = "0") int low) {
+        int tamano = Math.max(1, limit);
+        int umbral = Math.max(0, threshold);
+        String patron = (q == null || q.isBlank()) ? null : "%" + q.trim().toLowerCase() + "%";
+
+        Page<Map<String, Object>> page = productRepository.listarExistencias(
+                patron, low == 1 ? 1 : 0, umbral, PageRequest.of(offset / tamano, tamano));
+
+        List<Map<String, Object>> data = page.getContent().stream().map(row -> {
+            int stock = entero(row.get("stock"));
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", row.get("id"));
+            m.put("name", row.get("name"));
+            m.put("slug", row.get("slug"));
+            m.put("stock", stock);
+            m.put("price", row.get("price"));
+            m.put("category", row.get("category"));
+            m.put("isActive", entero(row.get("isActive")) == 1);
+            // El estado se calcula aquí y no en el panel para que la alerta
+            // del dashboard y esta lista usen el mismo umbral.
+            m.put("estado", stock <= 0 ? "agotado" : stock <= umbral ? "bajo" : "ok");
+            return m;
+        }).toList();
+
+        Map<String, Object> resumen = productRepository.resumenDeExistencias(umbral);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("data", data);
+        resp.put("total", page.getTotalElements());
+        resp.put("threshold", umbral);
+        resp.put("lowCount", entero(resumen.get("bajos")));
+        resp.put("outCount", entero(resumen.get("agotados")));
+        resp.put("trackedCount", entero(resumen.get("total")));
+        return resp;
+    }
+
+    private static int entero(Object v) {
+        if (v == null) return 0;
+        if (v instanceof Number n) return n.intValue();
+        try {
+            return Integer.parseInt(v.toString());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     @GetMapping("/movements")
     public Map<String, Object> movements(@RequestParam(defaultValue = "20") int limit,
                                          @RequestParam(defaultValue = "0") int offset,

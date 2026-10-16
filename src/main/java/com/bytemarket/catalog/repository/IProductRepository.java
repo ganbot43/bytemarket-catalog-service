@@ -75,6 +75,56 @@ public interface IProductRepository extends JpaRepository<Product, Integer>, Jpa
     List<Product> findBestSellers();
 
     /**
+     * Existencias para la pantalla de inventario.
+     *
+     * Distinta de findProductosBajoStock, que devuelve TODO lo que está bajo
+     * el umbral sin paginar porque alimenta una alerta. Esta es la lista que
+     * se recorre a mano: pagina, busca por nombre y deja ver todo o solo lo
+     * que falta, y ordena por el stock más bajo primero —que es el orden en
+     * que se decide qué reponer—.
+     *
+     * Incluye los productos inactivos a propósito: un producto desactivado
+     * sigue teniendo existencias físicas en el almacén.
+     */
+    @Query(value = """
+            SELECT p.id                       AS id,
+                   p.name                     AS name,
+                   p.slug                     AS slug,
+                   p.stock                    AS stock,
+                   p.price                    AS price,
+                   p.is_active                AS isActive,
+                   p.track_stock               AS trackStock,
+                   COALESCE(c.name, '')       AS category
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.category_id
+            WHERE p.track_stock = 1
+              AND (:patron IS NULL OR LOWER(p.name) LIKE :patron)
+              AND (:soloBajos = 0 OR p.stock <= :umbral)
+            ORDER BY p.stock ASC, p.name ASC
+            """,
+            countQuery = """
+            SELECT COUNT(*) FROM products p
+            WHERE p.track_stock = 1
+              AND (:patron IS NULL OR LOWER(p.name) LIKE :patron)
+              AND (:soloBajos = 0 OR p.stock <= :umbral)
+            """,
+            nativeQuery = true)
+    Page<Map<String, Object>> listarExistencias(@Param("patron") String patron,
+                                                @Param("soloBajos") int soloBajos,
+                                                @Param("umbral") int umbral,
+                                                Pageable pageable);
+
+    /** Cuántos productos están bajo el umbral y cuántos agotados del todo. */
+    @Query(value = """
+            SELECT COALESCE(SUM(CASE WHEN p.stock <= :umbral THEN 1 ELSE 0 END), 0) AS bajos,
+                   COALESCE(SUM(CASE WHEN p.stock <= 0 THEN 1 ELSE 0 END), 0)       AS agotados,
+                   COUNT(*)                                                         AS total
+            FROM products p
+            WHERE p.track_stock = 1
+            """, nativeQuery = true)
+    Map<String, Object> resumenDeExistencias(@Param("umbral") int umbral);
+
+    /**
      * Reporte: Productos con stock por debajo del umbral indicado.
      * Retorna: id, nombre, categoria, stock, precio, estado
      * Solo productos activos con track_stock activado.
