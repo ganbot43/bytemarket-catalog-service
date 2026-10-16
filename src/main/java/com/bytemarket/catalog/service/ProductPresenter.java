@@ -58,6 +58,39 @@ public class ProductPresenter {
         return map;
     }
 
+    /**
+     * La fila de la tabla del panel.
+     *
+     * Es más corta que toMap() a propósito: el panel pinta otras columnas que
+     * la tienda. Estaba escrita a mano dentro del controlador de admin, que
+     * es cómo se le olvidó la descripción —el formulario de edición la
+     * cargaba vacía y al guardar BORRABA la descripción real—. Aquí al menos
+     * está junto al otro mapeo, donde se ve lo que lleva cada uno.
+     */
+    public Map<String, Object> filaAdmin(Product p) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", p.getId());
+        m.put("name", p.getName());
+        m.put("slug", p.getSlug());
+        m.put("price", p.getPrice());
+        m.put("comparePrice", p.getDiscountPrice());
+        m.put("stock", p.getStock());
+        m.put("categoryId", p.getCategory() != null ? p.getCategory().getId() : null);
+        m.put("subcategoryId", p.getSubcategoryId());
+        m.put("trackStock", p.getTrackStock() != null && p.getTrackStock() == 1);
+        m.put("isFeatured", p.getIsFeatured() != null && p.getIsFeatured() == 1);
+        m.put("nuevoLanzamiento", p.getNuevoLanzamiento() != null && p.getNuevoLanzamiento() == 1);
+        m.put("isActive", p.getIsActive() != null && p.getIsActive() == 1);
+        m.put("description", p.getDescription());
+        m.put("createdAt", p.getCreatedAt());
+        // La tabla pinta category.name bajo el nombre del producto.
+        m.put("category", p.getCategory() == null ? null
+                : Map.of("id", p.getCategory().getId(), "name", p.getCategory().getName()));
+        // Firmadas: el panel también las muestra y el bucket es privado.
+        m.put("images", imagenes(p));
+        return m;
+    }
+
     /** Las URLs se firman aquí, al leer: el bucket es privado. */
     public List<Map<String, Object>> imagenes(Product p) {
         if (p.getImages() == null) return List.of();

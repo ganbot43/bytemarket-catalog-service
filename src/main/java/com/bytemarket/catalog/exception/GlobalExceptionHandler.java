@@ -32,6 +32,17 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * Regla del catálogo incumplida. Trae su propio estado porque no todas
+     * fallan igual: nombre vacío es 400, producto inexistente 404, y borrar
+     * uno con kardex 409.
+     */
+    @ExceptionHandler(CatalogoException.class)
+    public ResponseEntity<Map<String, Object>> catalogo(CatalogoException ex) {
+        HttpStatus estado = HttpStatus.resolve(ex.getStatus());
+        return respuesta(estado == null ? HttpStatus.BAD_REQUEST : estado, ex.getMessage());
+    }
+
     /** Ruta que no existe. */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> noEncontrado(NoResourceFoundException ex) {

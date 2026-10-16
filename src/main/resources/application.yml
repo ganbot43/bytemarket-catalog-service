@@ -24,14 +24,15 @@ spring:
       # es 1 MB y cortaba la subida antes de llegar al controlador.
       max-file-size: 5MB
       max-request-size: 10MB
-  # Mensajería: preparada, todavía sin usar.
+  # ── Mensajería ───────────────────────────────────────────────
+  # Este servicio CONSUME la cola de stock que publica order-service: ahí
+  # llegan los descuentos por venta y las devoluciones por cancelación (ver
+  # RabbitConfig y StockListener).
   #
-  # Hoy esta sección es inerte porque ningún pom.xml incluye AMQP ni Kafka:
-  # Spring la ignora. Queda escrita para cuando se necesite (por ejemplo,
-  # avisar al catálogo de un pedido sin que order-service dependa de él).
-  # Para activarla hay que añadir al pom:
-  #   spring-boot-starter-amqp   (RabbitMQ, ya en docker-compose)
-  #   spring-kafka               (Kafka, ya en docker-compose)
+  # De Kafka no consume nada. El topic bytemarket.pedidos lleva los eventos
+  # del pedido y lo lee support-service para avisar al cliente; al catálogo
+  # no le incumben. La sección de abajo se queda porque el .env la rellena
+  # para todos los servicios por igual.
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}

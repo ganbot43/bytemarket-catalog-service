@@ -41,6 +41,18 @@ public class SecurityConfig {
                 // es público, pero eso deja que cualquiera llene el bucket:
                 // aquí se exige staff a propósito.
                 .requestMatchers("/api/upload/**").hasAnyRole("ADMIN", "SUPERADMIN")
+                // Las rutas internas NO son públicas, aunque el gateway no
+                // las enrute: docker-compose publica el 8082, así que un curl
+                // desde el host llegaba igual. Y ahí dentro vive
+                // /api/internal/products/stock-decrement, que mueve
+                // inventario: estaba cayendo en el permitAll() de abajo y
+                // cualquiera podía descontar stock sin identificarse.
+                //
+                // El rol SERVICE lo trae el JWT que firma order-service con el
+                // secreto compartido (ver su ServiceTokenProvider). Se admite
+                // también staff para poder depurar estos endpoints a mano
+                // desde el panel sin montar un token de servicio.
+                .requestMatchers("/api/internal/**").hasAnyRole("SERVICE", "ADMIN", "SUPERADMIN")
                 .anyRequest().permitAll()
             )
             .exceptionHandling(ex -> ex
