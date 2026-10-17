@@ -45,7 +45,7 @@ public class ApiAdminInventoryController {
     public Map<String, Object> stock(@RequestParam(defaultValue = "20") int limit,
                                      @RequestParam(defaultValue = "0") int offset,
                                      @RequestParam(required = false) String q,
-                                     @RequestParam(defaultValue = "10") int threshold,
+                                     @RequestParam(defaultValue = Product.UMBRAL_STOCK_BAJO_TXT) int threshold,
                                      @RequestParam(defaultValue = "0") int low) {
         int tamano = Math.max(1, limit);
         int umbral = Math.max(0, threshold);
@@ -91,25 +91,25 @@ public class ApiAdminInventoryController {
         }
     }
 
+    /**
+     * El kardex, con los filtros del panel: producto, tipo y buscador.
+     *
+     * Los tres van a una sola consulta con parámetros opcionales. Antes era
+     * una cadena de ifs que elegía entre cuatro métodos del repositorio, y
+     * al añadir el buscador habrían sido ocho ramas para la misma pregunta.
+     */
     @GetMapping("/movements")
     public Map<String, Object> movements(@RequestParam(defaultValue = "20") int limit,
                                          @RequestParam(defaultValue = "0") int offset,
                                          @RequestParam(required = false) Integer productId,
-                                         @RequestParam(required = false) String type) {
+                                         @RequestParam(required = false) String type,
+                                         @RequestParam(required = false) String q) {
         int tamano = Math.max(1, limit);
         Pageable pagina = PageRequest.of(offset / tamano, tamano, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        boolean hayTipo = type != null && !type.isBlank();
-        Page<InventoryMovement> page;
-        if (productId != null && hayTipo) {
-            page = movementRepository.findByProductIdAndMovementType(productId, type, pagina);
-        } else if (productId != null) {
-            page = movementRepository.findByProductId(productId, pagina);
-        } else if (hayTipo) {
-            page = movementRepository.findByMovementType(type, pagina);
-        } else {
-            page = movementRepository.findAll(pagina);
-        }
+        String tipo = (type == null || type.isBlank()) ? null : type;
+        String patron = (q == null || q.isBlank()) ? null : "%" + q.trim().toLowerCase() + "%";
+        Page<InventoryMovement> page = movementRepository.buscar(productId, tipo, patron, pagina);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("data", page.getContent().stream().map(this::dto).toList());

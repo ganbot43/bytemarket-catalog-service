@@ -71,9 +71,17 @@ public class ApiInternalProductController {
         return ResponseEntity.ok(Map.of("applied", stockService.devolver(orderId(body), items(body))));
     }
 
-    /** Productos activos bajo el umbral de stock, para las alertas del panel. */
+    /**
+     * Productos activos bajo el umbral de stock, para las alertas del panel.
+     *
+     * Devuelve también el umbral aplicado, y no solo la lista, porque quien
+     * llama (order-service) ya no manda ninguno: la regla es de aquí, y el
+     * panel necesita poder escribir "con 5 unidades o menos" sin tener su
+     * propia copia del número.
+     */
     @GetMapping("/low-stock")
-    public List<Map<String, Object>> lowStock(@RequestParam(defaultValue = "10") int threshold) {
+    public Map<String, Object> lowStock(
+            @RequestParam(defaultValue = Product.UMBRAL_STOCK_BAJO_TXT) int threshold) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> row : productRepository.findProductosBajoStock(threshold)) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -84,7 +92,10 @@ public class ApiInternalProductController {
             m.put("category", Map.of("name", row.get("categoria")));
             out.add(m);
         }
-        return out;
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("data", out);
+        resp.put("threshold", threshold);
+        return resp;
     }
 
     /**

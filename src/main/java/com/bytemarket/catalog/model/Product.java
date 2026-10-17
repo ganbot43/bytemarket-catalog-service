@@ -14,6 +14,24 @@ import java.util.List;
     @Index(name = "idx_product_category", columnList = "category_id")
 })
 public class Product {
+
+    /**
+     * Stock a partir del cual el panel marca alerta.
+     *
+     * Vive aquí, en el dueño del dato, y no en cada pantalla: el umbral lo
+     * usaban la lista de existencias, la tarjeta "Stock bajo" del dashboard
+     * y las alertas de stock, cada una con su propio 10 por defecto. Con
+     * tres copias, cambiarlo en una dejaba al panel diciendo dos cosas
+     * distintas sobre el mismo producto.
+     *
+     * order-service no puede leer esta constante —es otro servicio—, así
+     * que no manda umbral y deja que catalog aplique el suyo.
+     */
+    public static final int UMBRAL_STOCK_BAJO = 5;
+
+    /** El mismo número como texto: @RequestParam(defaultValue) exige una constante String. */
+    public static final String UMBRAL_STOCK_BAJO_TXT = "5";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
