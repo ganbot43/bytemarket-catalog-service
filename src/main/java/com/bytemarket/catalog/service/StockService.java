@@ -33,6 +33,9 @@ public class StockService {
 
     private static final Logger log = LoggerFactory.getLogger(StockService.class);
 
+    /** Cuántas veces releer el stock antes de rendirse con un movimiento parcial. */
+    private static final int REINTENTOS = 5;
+
     private final IProductRepository productRepository;
     private final IInventoryMovementRepository movementRepository;
 
@@ -72,9 +75,7 @@ public class StockService {
             // trackStock a 0 significa que ese producto no lleva inventario.
             if (p == null || p.getTrackStock() == null || p.getTrackStock() != 1) continue;
 
-            int actual = p.getStock() == null ? 0 : p.getStock();
             int deltaPedido = signo * cantidad;
-            String razon = motivo;
 
             /*
              * El movimiento y la existencia tienen que contar lo mismo.
@@ -83,33 +84,30 @@ public class StockService {
              * de un save, y guardaba el movimiento con el delta COMPLETO.
              * Con stock 2 y una venta de 5, la columna pasaba a 0 —se había
              * movido 2— y el kardex anotaba -5. A partir de ahí el histórico
-             * dejaba de explicar la existencia, y nada lo avisaba: el recorte
-             * era invisible.
+             * dejaba de explicar la existencia, y nada lo avisaba.
              *
-             * Ahora la suma la hace la base de datos en un solo UPDATE, que
-             * además es atómico y cierra la carrera del "lee, suma, escribe".
-             * Si no cabe, se aplica lo que hay y el movimiento anota ESO,
-             * con el motivo diciendo que faltaron unidades.
+             * aplicarMovimiento devuelve lo que SE MOVIÓ de verdad, releído
+             * de la base y no de la copia que se cargó más arriba.
              */
-            int deltaAplicado = deltaPedido;
-            if (productRepository.moverStock(productId, deltaPedido) == 0) {
-                // No cupo: el stock se quedaría en negativo. Pasa cuando dos
-                // ventas se llevan la última unidad, porque validar y
-                // descontar no son el mismo instante.
-                deltaAplicado = -actual;
-                int faltan = cantidad - actual;
-                razon = motivo + " (faltaron " + faltan + ", stock insuficiente)";
-                log.error("Pedido {} producto {}: se pidieron {} unidades y solo había {}. "
-                                + "Se descuenta hasta cero y el kardex lo deja anotado.",
-                        orderId, productId, cantidad, actual);
-                if (deltaAplicado != 0) {
-                    productRepository.moverStock(productId, deltaAplicado);
-                }
+            int deltaAplicado = aplicarMovimiento(productId, deltaPedido);
+
+            if (deltaAplicado == 0) {
+                // Ni una unidad. Se avisa y no se escribe movimiento: un
+                // delta de cero no explica nada y ensucia el kardex.
+                log.error("Pedido {} producto {}: no se pudo aplicar el movimiento '{}' de {} unidades; "
+                                + "el stock no daba. Queda sin descontar.",
+                        orderId, productId, tipo, cantidad);
+                continue;
             }
 
-            // Un movimiento de cero no mueve nada: anotarlo solo ensucia el
-            // kardex. El log de arriba ya dejó constancia del intento.
-            if (deltaAplicado == 0) continue;
+            String razon = motivo;
+            if (deltaAplicado != deltaPedido) {
+                int faltaron = cantidad - Math.abs(deltaAplicado);
+                razon = motivo + " (faltaron " + faltaron + ", stock insuficiente)";
+                log.error("Pedido {} producto {}: se pidieron {} unidades y solo se pudieron mover {}. "
+                                + "El kardex lo deja anotado.",
+                        orderId, productId, cantidad, Math.abs(deltaAplicado));
+            }
 
             InventoryMovement mov = new InventoryMovement();
             mov.setProduct(p);
@@ -122,6 +120,38 @@ public class StockService {
             aplicadas++;
         }
         return aplicadas;
+    }
+
+    /**
+     * Mueve lo que se pide; si no cabe entero, lo que quepa. Devuelve lo
+     * que de verdad se movió, que es lo único que se puede anotar.
+     *
+     * La cifra para el movimiento parcial se RELEE, no se reutiliza la que
+     * se cargó al principio del bucle: entre aquella lectura y este punto
+     * cabe otra venta del mismo producto, y entonces el número viejo ya no
+     * es el que hay. Reintentar es la forma barata de resolverlo sin
+     * bloquear la fila: si otro se adelanta, se vuelve a mirar.
+     *
+     * Y se mira SIEMPRE el valor que devuelve el UPDATE: cero filas
+     * significa que no se movió nada, por mucho que la lectura dijera otra
+     * cosa un instante antes.
+     */
+    private int aplicarMovimiento(Integer productId, int delta) {
+        if (delta == 0) return 0;
+        if (productRepository.moverStock(productId, delta) > 0) return delta;
+
+        // Una entrada no puede fallar por falta de sitio: si falló, el
+        // producto ya no está, y no hay movimiento parcial que valga.
+        if (delta > 0) return 0;
+
+        for (int intento = 0; intento < REINTENTOS; intento++) {
+            Integer disponible = productRepository.stockDe(productId);
+            if (disponible == null || disponible <= 0) return 0;
+            if (productRepository.moverStock(productId, -disponible) > 0) return -disponible;
+        }
+        log.error("Producto {}: el stock cambió en cada uno de los {} intentos; no se aplicó nada.",
+                productId, REINTENTOS);
+        return 0;
     }
 
     private static Integer entero(Object v) {

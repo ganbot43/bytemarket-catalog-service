@@ -58,6 +58,17 @@ class StockLedgerTest {
         producto = productRepository.saveAndFlush(producto);
     }
 
+    private Product conStock(int stock) {
+        producto.setStock(stock);
+        return producto;
+    }
+
+    private List<InventoryMovement> movimientosDelProducto() {
+        return movementRepository.findAll().stream()
+                .filter(m -> m.getProduct() != null && m.getProduct().getId().equals(producto.getId()))
+                .toList();
+    }
+
     /** Lo que dice el kardex que debería haber. */
     private int segunElKardex() {
         return movementRepository.findAll().stream()
@@ -104,6 +115,18 @@ class StockLedgerTest {
                 .findFirst().orElseThrow();
         assertTrue(mov.getReason() != null && mov.getReason().contains("faltaron"),
                 "el motivo debe dejar constancia de que no alcanzaba: " + mov.getReason());
+    }
+
+    @Test
+    @DisplayName("sin stock no se escribe movimiento: un delta de cero no explica nada")
+    void sinStockNoHayMovimiento() {
+        productRepository.saveAndFlush(conStock(0));
+
+        stockService.descontar(4L, List.of(Map.of("productId", producto.getId(), "quantity", 3)));
+
+        assertEquals(0, segunLaColumna());
+        assertEquals(0, movimientosDelProducto().size(),
+                "no se movió nada, así que no hay nada que anotar");
     }
 
     @Test

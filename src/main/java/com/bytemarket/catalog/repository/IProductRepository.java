@@ -32,12 +32,20 @@ public interface IProductRepository extends JpaRepository<Product, Integer>, Jpa
      * Aquí la suma la hace MySQL dentro del UPDATE, que es atómico: dos
      * peticiones simultáneas se serializan solas.
      *
-     * La condición `stock + :delta >= 0` es la otra mitad: si el movimiento
+     * El COALESCE es cinturón y tirantes: hoy la columna es NOT NULL con
+     * 0 por defecto, pero si alguien la hiciera nullable, `p.stock +
+     * :delta` valdría NULL, la condición no se cumpliría nunca y ningún
+     * movimiento se aplicaría —ni siquiera una entrada—, en silencio.
+     *
+     * La condición `>= 0` es la otra mitad: si el movimiento
      * dejaría el stock en negativo, no se aplica y devuelve 0 filas. Quien
      * llama decide qué hacer con eso, pero se entera.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE Product p SET p.stock = p.stock + :delta WHERE p.id = :id AND p.stock + :delta >= 0")
+    @Query("""
+            UPDATE Product p SET p.stock = COALESCE(p.stock, 0) + :delta
+            WHERE p.id = :id AND COALESCE(p.stock, 0) + :delta >= 0
+            """)
     int moverStock(@Param("id") Integer id, @Param("delta") int delta);
 
     /** Lo que de verdad hay ahora, releído tras un UPDATE atómico. */
