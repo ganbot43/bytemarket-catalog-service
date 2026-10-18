@@ -73,6 +73,21 @@ public class Product {
     @Column(nullable = false)
     private Integer stock = 0;
 
+    /**
+     * Unidades comprometidas con un pedido que todavía no se ha descontado.
+     *
+     * Lo disponible para vender es `stock - reserved`, no `stock`. La
+     * diferencia importa porque validar el stock y descontarlo no ocurren en
+     * el mismo instante: entre una cosa y otra cabía otra compra del mismo
+     * producto, y las dos pasaban la validación mirando la misma cifra.
+     *
+     * No es un segundo almacén: la mercancía sigue ahí. Es una promesa, y se
+     * deshace sola si el pedido que la hizo no llega a buen puerto —ver
+     * StockReservation, que les pone fecha de caducidad—.
+     */
+    @Column(nullable = false)
+    private Integer reserved = 0;
+
     @Column(name = "track_stock", nullable = false)
     private Integer trackStock = 1;
 

@@ -37,7 +37,7 @@ public class StockListener {
 
         try {
             int aplicadas = switch (tipo) {
-                case "exit" -> stockService.descontar(orderId, items);
+                case "exit" -> stockService.descontar(orderId, codigo, items);
                 case "entry" -> stockService.devolver(orderId, items);
                 // Un tipo desconocido no se arregla reintentando: se aparta a
                 // la cola de fallidos en vez de reencolarse sin fin.

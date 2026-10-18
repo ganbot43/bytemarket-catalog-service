@@ -5,7 +5,9 @@ import com.bytemarket.catalog.model.InventoryMovement;
 import com.bytemarket.catalog.model.Product;
 import com.bytemarket.catalog.repository.IInventoryMovementRepository;
 import com.bytemarket.catalog.repository.IProductRepository;
+import com.bytemarket.catalog.service.ReservationService;
 import com.bytemarket.catalog.service.StockService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +31,8 @@ public class ApiInternalProductController {
 
     private final StockService stockService;
 
+    private final ReservationService reservationService;
+
     private final IInventoryMovementRepository inventoryMovementRepository;
 
     /**
@@ -45,6 +49,42 @@ public class ApiInternalProductController {
             productRepository.findById(id).ifPresent(p -> out.add(snapshot(p)));
         }
         return out;
+    }
+
+    /**
+     * Aparta las unidades de un pedido que se está cerrando.
+     *
+     * Es lo primero que hace el checkout, antes de guardar nada: si no
+     * alcanza, el pedido no llega a existir. Al revés —guardar y luego
+     * mirar— ya sería tarde.
+     *
+     * 409 y no 400 cuando falta stock: no es que la petición esté mal
+     * formada, es que el mundo cambió entre que el cliente miró y pulsó.
+     */
+    @PostMapping("/stock-reserve")
+    public ResponseEntity<?> reserveStock(@RequestBody Map<String, Object> body) {
+        String orderCode = body.get("orderCode") == null ? null : body.get("orderCode").toString();
+        try {
+            reservationService.reservar(orderCode, items(body));
+            return ResponseEntity.ok(Map.of("reserved", true, "orderCode", String.valueOf(orderCode)));
+        } catch (ReservationService.SinStockException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("statusCode", 409, "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Devuelve lo apartado de un pedido que no salió adelante.
+     *
+     * Se llama cuando el pedido falla después de reservar. No es
+     * imprescindible —las reservas caducan solas— pero devolver al momento
+     * evita que el producto figure agotado durante el plazo de gracia por
+     * un pedido que ya se sabe que no existe.
+     */
+    @PostMapping("/stock-release")
+    public ResponseEntity<?> releaseStock(@RequestBody Map<String, Object> body) {
+        String orderCode = body.get("orderCode") == null ? null : body.get("orderCode").toString();
+        return ResponseEntity.ok(Map.of("released", reservationService.liberar(orderCode)));
     }
 
     /**
@@ -168,7 +208,22 @@ public class ApiInternalProductController {
         m.put("name", p.getName());
         m.put("slug", p.getSlug());
         m.put("price", precioVigente(p));
-        m.put("stock", p.getStock());
+        /*
+         * `stock` aquí es lo DISPONIBLE, no lo que hay en el almacén.
+         *
+         * Quien consume esto es la validación del checkout, y lo que
+         * necesita saber es cuánto puede prometer: lo que hay menos lo ya
+         * comprometido con otros pedidos. Mandar la cifra bruta hacía que
+         * el mensaje de "solo quedan N" contara unidades que ya tenían
+         * dueño.
+         *
+         * La cifra del almacén va aparte, por si alguien la necesita.
+         */
+        int enAlmacen = p.getStock() == null ? 0 : p.getStock();
+        int comprometido = p.getReserved() == null ? 0 : p.getReserved();
+        m.put("stock", Math.max(0, enAlmacen - comprometido));
+        m.put("stockEnAlmacen", enAlmacen);
+        m.put("reserved", comprometido);
         m.put("trackStock", p.getTrackStock() != null && p.getTrackStock() == 1);
         m.put("isActive", p.getIsActive() != null && p.getIsActive() == 1);
         return m;

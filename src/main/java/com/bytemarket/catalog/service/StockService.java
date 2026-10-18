@@ -2,6 +2,7 @@ package com.bytemarket.catalog.service;
 
 import com.bytemarket.catalog.model.InventoryMovement;
 import com.bytemarket.catalog.model.Product;
+import com.bytemarket.catalog.model.StockReservation;
 import com.bytemarket.catalog.repository.IInventoryMovementRepository;
 import com.bytemarket.catalog.repository.IProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,10 +40,46 @@ public class StockService {
     private final IProductRepository productRepository;
     private final IInventoryMovementRepository movementRepository;
 
-    /** Descuenta por una venta. Devuelve cuántas líneas aplicó. */
+    private final ReservationService reservationService;
+
+    /**
+     * Descuenta por una venta. Devuelve cuántas líneas aplicó.
+     *
+     * Si el pedido venía con unidades apartadas —el camino normal del
+     * checkout— se consumen esas: bajan a la vez el stock y lo comprometido,
+     * y el kardex anota la salida. Esa ruta no puede quedarse corta, porque
+     * las unidades estaban guardadas desde antes de que el pedido existiera.
+     *
+     * Sin reserva se descuenta como siempre. Es lo que pasa con las ventas
+     * de mostrador, que entregan en el acto, y con los pedidos anteriores a
+     * que existieran las reservas.
+     */
+    @Transactional
+    public int descontar(Long orderId, String orderCode, List<Map<String, Object>> items) {
+        if (orderCode != null && !orderCode.isBlank()) {
+            List<StockReservation> consumidas = reservationService.consumir(orderCode);
+            if (!consumidas.isEmpty()) {
+                for (StockReservation r : consumidas) {
+                    InventoryMovement mov = new InventoryMovement();
+                    mov.setProduct(r.getProduct());
+                    mov.setMovementType("exit");
+                    mov.setQuantity(r.getQuantity());
+                    mov.setDelta(-r.getQuantity());
+                    mov.setReason("Venta");
+                    mov.setRelatedOrderId(orderId);
+                    movementRepository.save(mov);
+                }
+                log.debug("Pedido {}: consumidas {} reserva(s)", orderCode, consumidas.size());
+                return consumidas.size();
+            }
+        }
+        return mover(orderId, items, "exit", "Venta", -1);
+    }
+
+    /** Sin código de pedido: no hay reserva que consumir. */
     @Transactional
     public int descontar(Long orderId, List<Map<String, Object>> items) {
-        return mover(orderId, items, "exit", "Venta", -1);
+        return descontar(orderId, null, items);
     }
 
     /** Devuelve el stock al cancelar un pedido. */

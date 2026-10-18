@@ -48,6 +48,55 @@ public interface IProductRepository extends JpaRepository<Product, Integer>, Jpa
             """)
     int moverStock(@Param("id") Integer id, @Param("delta") int delta);
 
+    /**
+     * Aparta unidades, si quedan libres.
+     *
+     * Lo disponible es `stock - reserved`, no `stock`: lo ya comprometido
+     * con otro pedido no se puede prometer dos veces. La comprobación va
+     * dentro del UPDATE para que sea atómica — mirar primero y apartar
+     * después es justo el hueco que esto viene a cerrar.
+     *
+     * Devuelve 0 filas si no alcanza, y entonces el checkout lo dice.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Product p SET p.reserved = COALESCE(p.reserved, 0) + :cantidad
+            WHERE p.id = :id
+              AND COALESCE(p.stock, 0) - COALESCE(p.reserved, 0) >= :cantidad
+            """)
+    int reservar(@Param("id") Integer id, @Param("cantidad") int cantidad);
+
+    /**
+     * Convierte unidades apartadas en salida real: bajan las dos cifras.
+     *
+     * Las dos a la vez y en una sola operación, porque son la misma cosa
+     * vista dos veces: la mercancía sale del almacén y deja de estar
+     * prometida. Bajar una sin la otra deja el producto diciendo que hay
+     * menos disponible de lo que hay.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Product p
+            SET p.stock = COALESCE(p.stock, 0) - :cantidad,
+                p.reserved = COALESCE(p.reserved, 0) - :cantidad
+            WHERE p.id = :id
+              AND COALESCE(p.reserved, 0) >= :cantidad
+              AND COALESCE(p.stock, 0) >= :cantidad
+            """)
+    int consumirReserva(@Param("id") Integer id, @Param("cantidad") int cantidad);
+
+    /** Devuelve unidades apartadas sin vender. El stock no se toca: nunca salió. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Product p SET p.reserved = COALESCE(p.reserved, 0) - :cantidad
+            WHERE p.id = :id AND COALESCE(p.reserved, 0) >= :cantidad
+            """)
+    int liberarReserva(@Param("id") Integer id, @Param("cantidad") int cantidad);
+
+    /** Lo comprometido ahora mismo, releído. */
+    @Query("SELECT COALESCE(p.reserved, 0) FROM Product p WHERE p.id = :id")
+    Integer reservadoDe(@Param("id") Integer id);
+
     /** Lo que de verdad hay ahora, releído tras un UPDATE atómico. */
     @Query("SELECT COALESCE(p.stock, 0) FROM Product p WHERE p.id = :id")
     Integer stockDe(@Param("id") Integer id);
