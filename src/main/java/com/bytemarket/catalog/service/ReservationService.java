@@ -76,9 +76,9 @@ public class ReservationService {
      * tendría unidades bloqueadas a su nombre durante el plazo de gracia.
      */
     @Transactional
-    public void reservar(String orderCode, List<Map<String, Object>> items) {
-        if (orderCode == null || orderCode.isBlank()) {
-            throw new IllegalArgumentException("La reserva necesita el código del pedido");
+    public void reservar(String token, String orderCode, List<Map<String, Object>> items) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("La reserva necesita su llave");
         }
         if (items == null || items.isEmpty()) return;
 
@@ -110,14 +110,15 @@ public class ReservationService {
 
             StockReservation r = new StockReservation();
             r.setProduct(p);
-            r.setOrderCode(orderCode);
+            r.setToken(token);
+            r.setOrderCode(orderCode == null ? token : orderCode);
             r.setQuantity(cantidad);
             r.setStatus(StockReservation.RETENIDA);
             r.setExpiresAt(caduca);
             hechas.add(reservationRepository.save(r));
         }
         if (!hechas.isEmpty()) {
-            log.debug("Pedido {}: {} línea(s) apartadas hasta {}", orderCode, hechas.size(), caduca);
+            log.debug("Reserva {} (pedido {}): {} línea(s) hasta {}", token, orderCode, hechas.size(), caduca);
         }
     }
 
@@ -130,24 +131,38 @@ public class ReservationService {
      * "al menos una vez".
      */
     @Transactional
-    public List<StockReservation> consumir(String orderCode) {
+    public List<StockReservation> consumir(String token) {
         List<StockReservation> retenidas = reservationRepository
-                .findByOrderCodeAndStatus(orderCode, StockReservation.RETENIDA);
+                .findByTokenAndStatus(token, StockReservation.RETENIDA);
         List<StockReservation> consumidas = new ArrayList<>();
 
         for (StockReservation r : retenidas) {
             Integer productId = r.getProduct().getId();
-            if (productRepository.consumirReserva(productId, r.getQuantity()) == 0) {
-                // No debería pasar: lo apartado está apartado. Si pasa, es
-                // que alguien tocó el stock por fuera, y hay que saberlo.
-                log.error("Pedido {} producto {}: no se pudo consumir la reserva de {} unidades. "
-                                + "Alguien movió el stock por fuera.",
-                        orderCode, productId, r.getQuantity());
+
+            // Igual que al liberar: la condición en el UPDATE decide quién
+            // se lleva la reserva, y solo ese toca los contadores.
+            if (reservationRepository.resolver(r.getId(), StockReservation.CONSUMIDA, LocalDateTime.now()) == 0) {
+                log.debug("Reserva {} ya estaba resuelta; otro mensaje la consumió.", r.getId());
                 continue;
             }
-            r.setStatus(StockReservation.CONSUMIDA);
-            r.setResolvedAt(LocalDateTime.now());
-            reservationRepository.save(r);
+
+            if (productRepository.consumirReserva(productId, r.getQuantity()) == 0) {
+                /*
+                 * No debería pasar: lo apartado está apartado. Si pasa es
+                 * que alguien movió el stock por fuera.
+                 *
+                 * Se relanza en vez de seguir, y eso es deliberado: aceptar
+                 * el consumo a medias dejaría el pedido dado por servido
+                 * con el stock sin descontar, y nadie volvería a mirarlo.
+                 * Al relanzar, la transacción se deshace entera y el mensaje
+                 * vuelve a la cola —y si insiste, a la de fallidos, que es
+                 * donde alguien lo verá—.
+                 */
+                throw new IllegalStateException(
+                        "Reserva " + token + " producto " + productId
+                                + ": no se pudo consumir la reserva de " + r.getQuantity()
+                                + " unidades. Alguien movió el stock por fuera.");
+            }
             consumidas.add(r);
         }
         return consumidas;
@@ -155,9 +170,9 @@ public class ReservationService {
 
     /** Devuelve lo apartado de un pedido que no salió adelante. */
     @Transactional
-    public int liberar(String orderCode) {
+    public int liberar(String token) {
         List<StockReservation> retenidas = reservationRepository
-                .findByOrderCodeAndStatus(orderCode, StockReservation.RETENIDA);
+                .findByTokenAndStatus(token, StockReservation.RETENIDA);
         devolver(retenidas, "pedido no confirmado");
         return retenidas.size();
     }
@@ -179,12 +194,23 @@ public class ReservationService {
                 + "reservando y no confirmando.", caducadas.size());
     }
 
+    /**
+     * Devuelve las unidades de cada reserva, una sola vez.
+     *
+     * El estado se cambia PRIMERO y con una condición: solo quien consiga
+     * pasarla de "retenida" toca los contadores del producto. El barrido de
+     * caducadas y una liberación manual pueden caer sobre la misma fila a
+     * la vez, y sin esto las dos devolverían las mismas unidades: el
+     * `reserved` bajaría el doble de lo que subió y el catálogo diría que
+     * hay más disponible del que hay.
+     */
     private void devolver(List<StockReservation> reservas, String motivo) {
         for (StockReservation r : reservas) {
+            if (reservationRepository.resolver(r.getId(), StockReservation.LIBERADA, LocalDateTime.now()) == 0) {
+                log.debug("Reserva {} ya estaba resuelta; otro la tomó primero.", r.getId());
+                continue;
+            }
             productRepository.liberarReserva(r.getProduct().getId(), r.getQuantity());
-            r.setStatus(StockReservation.LIBERADA);
-            r.setResolvedAt(LocalDateTime.now());
-            reservationRepository.save(r);
             log.debug("Pedido {}: devueltas {} unidades del producto {} ({})",
                     r.getOrderCode(), r.getQuantity(), r.getProduct().getId(), motivo);
         }

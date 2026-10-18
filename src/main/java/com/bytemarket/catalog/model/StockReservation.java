@@ -28,7 +28,8 @@ import java.time.LocalDateTime;
 @Table(name = "stock_reservations", indexes = {
         // El barrido busca por estado y fecha; la confirmación, por pedido.
         @Index(name = "idx_reservas_estado_caduca", columnList = "status, expires_at"),
-        @Index(name = "idx_reservas_pedido", columnList = "order_code")
+        @Index(name = "idx_reservas_pedido", columnList = "order_code"),
+        @Index(name = "idx_reservas_token", columnList = "token")
 })
 public class StockReservation {
 
@@ -46,6 +47,27 @@ public class StockReservation {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
+
+    /**
+     * La llave de esta reserva, única por construcción.
+     *
+     * No se usa el código del pedido como llave, aunque lo parezca: ese
+     * código se genera ANTES de guardar el pedido, comprobando que no
+     * exista ya en la tabla de pedidos. Dos checkouts a la vez pueden
+     * sacar el mismo número, porque ninguno de los dos se ha guardado
+     * todavía cuando el otro mira.
+     *
+     * La colisión es rara —cuatro dígitos al azar— pero lo que provoca no
+     * lo es: liberar "el pedido BM-20261017-1234" devolvería también las
+     * unidades del otro cliente, y consumirlo le descontaría el stock dos
+     * veces. Un UUID no colisiona y eso deja de poder pasar.
+     *
+     * No lleva restricción de unicidad: identifica al GRUPO de reservas de
+     * un pedido, una por línea del carrito, y las tres del mismo carrito
+     * comparten token a propósito.
+     */
+    @Column(name = "token", length = 36, nullable = false)
+    private String token;
 
     /**
      * El pedido que la pidió, por código y no por id.

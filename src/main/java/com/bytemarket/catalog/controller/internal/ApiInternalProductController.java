@@ -63,10 +63,11 @@ public class ApiInternalProductController {
      */
     @PostMapping("/stock-reserve")
     public ResponseEntity<?> reserveStock(@RequestBody Map<String, Object> body) {
+        String token = body.get("token") == null ? null : body.get("token").toString();
         String orderCode = body.get("orderCode") == null ? null : body.get("orderCode").toString();
         try {
-            reservationService.reservar(orderCode, items(body));
-            return ResponseEntity.ok(Map.of("reserved", true, "orderCode", String.valueOf(orderCode)));
+            reservationService.reservar(token, orderCode, items(body));
+            return ResponseEntity.ok(Map.of("reserved", true, "token", String.valueOf(token)));
         } catch (ReservationService.SinStockException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("statusCode", 409, "message", e.getMessage()));
@@ -83,8 +84,8 @@ public class ApiInternalProductController {
      */
     @PostMapping("/stock-release")
     public ResponseEntity<?> releaseStock(@RequestBody Map<String, Object> body) {
-        String orderCode = body.get("orderCode") == null ? null : body.get("orderCode").toString();
-        return ResponseEntity.ok(Map.of("released", reservationService.liberar(orderCode)));
+        String token = body.get("token") == null ? null : body.get("token").toString();
+        return ResponseEntity.ok(Map.of("released", reservationService.liberar(token)));
     }
 
     /**

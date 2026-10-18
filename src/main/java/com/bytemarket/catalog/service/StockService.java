@@ -55,9 +55,9 @@ public class StockService {
      * que existieran las reservas.
      */
     @Transactional
-    public int descontar(Long orderId, String orderCode, List<Map<String, Object>> items) {
-        if (orderCode != null && !orderCode.isBlank()) {
-            List<StockReservation> consumidas = reservationService.consumir(orderCode);
+    public int descontar(Long orderId, String token, List<Map<String, Object>> items) {
+        if (token != null && !token.isBlank()) {
+            List<StockReservation> consumidas = reservationService.consumir(token);
             if (!consumidas.isEmpty()) {
                 for (StockReservation r : consumidas) {
                     InventoryMovement mov = new InventoryMovement();
@@ -69,14 +69,14 @@ public class StockService {
                     mov.setRelatedOrderId(orderId);
                     movementRepository.save(mov);
                 }
-                log.debug("Pedido {}: consumidas {} reserva(s)", orderCode, consumidas.size());
+                log.debug("Reserva {}: consumidas {} línea(s)", token, consumidas.size());
                 return consumidas.size();
             }
         }
         return mover(orderId, items, "exit", "Venta", -1);
     }
 
-    /** Sin código de pedido: no hay reserva que consumir. */
+    /** Sin llave de reserva: no hay nada que consumir, se descuenta directo. */
     @Transactional
     public int descontar(Long orderId, List<Map<String, Object>> items) {
         return descontar(orderId, null, items);

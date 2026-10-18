@@ -71,7 +71,7 @@ class ReservationServiceTest {
     @Test
     @DisplayName("apartar no mueve el stock, solo lo compromete")
     void reservarNoMueveStock() {
-        reservationService.reservar("BM-RES-1", linea(2));
+        reservationService.reservar("tok-BM-RES-1", "BM-RES-1", linea(2));
 
         assertEquals(3, productRepository.stockDe(producto.getId()), "la mercancía sigue en el almacén");
         assertEquals(2, productRepository.reservadoDe(producto.getId()), "pero dos ya tienen dueño");
@@ -84,11 +84,11 @@ class ReservationServiceTest {
         // Este es EL caso. Antes los dos preguntaban "¿hay 2?", los dos
         // recibían que sí —porque ninguno había descontado todavía— y se
         // vendían cuatro unidades de tres.
-        reservationService.reservar("BM-RES-A", linea(2));
+        reservationService.reservar("tok-BM-RES-A", "BM-RES-A", linea(2));
 
         ReservationService.SinStockException e = assertThrows(
                 ReservationService.SinStockException.class,
-                () -> reservationService.reservar("BM-RES-B", linea(2)));
+                () -> reservationService.reservar("tok-BM-RES-B", "BM-RES-B", linea(2)));
 
         assertTrue(e.getMessage().contains("1"), "debe decir cuántas quedan: " + e.getMessage());
         assertEquals(2, productRepository.reservadoDe(producto.getId()),
@@ -109,7 +109,7 @@ class ReservationServiceTest {
         final Product otro = productRepository.saveAndFlush(nuevo);
 
         assertThrows(ReservationService.SinStockException.class,
-                () -> reservationService.reservar("BM-RES-C", List.of(
+                () -> reservationService.reservar("tok-BM-RES-C", "BM-RES-C", List.of(
                         Map.of("productId", producto.getId(), "quantity", 2),
                         Map.of("productId", otro.getId(), "quantity", 5))));
 
@@ -124,8 +124,8 @@ class ReservationServiceTest {
     @Test
     @DisplayName("consumir baja el stock y lo comprometido a la vez, y escribe el kardex")
     void consumirMueveLasDosCifras() {
-        reservationService.reservar("BM-RES-2", linea(2));
-        int aplicadas = stockService.descontar(99L, "BM-RES-2", linea(2));
+        reservationService.reservar("tok-BM-RES-2", "BM-RES-2", linea(2));
+        int aplicadas = stockService.descontar(99L, "tok-BM-RES-2", linea(2));
 
         // Cuenta LÍNEAS aplicadas, no unidades: una línea de dos unidades
         // es 1, igual que devuelve la ruta sin reserva.
@@ -143,9 +143,9 @@ class ReservationServiceTest {
     @Test
     @DisplayName("consumir dos veces no descuenta dos veces")
     void consumirEsIdempotente() {
-        reservationService.reservar("BM-RES-3", linea(2));
-        stockService.descontar(98L, "BM-RES-3", linea(2));
-        stockService.descontar(98L, "BM-RES-3", linea(2));
+        reservationService.reservar("tok-BM-RES-3", "BM-RES-3", linea(2));
+        stockService.descontar(98L, "tok-BM-RES-3", linea(2));
+        stockService.descontar(98L, "tok-BM-RES-3", linea(2));
 
         assertEquals(1, productRepository.stockDe(producto.getId()),
                 "la cola entrega 'al menos una vez'; repetir no puede cobrar dos");
@@ -154,10 +154,10 @@ class ReservationServiceTest {
     @Test
     @DisplayName("liberar devuelve lo apartado sin tocar el stock")
     void liberarDevuelve() {
-        reservationService.reservar("BM-RES-4", linea(3));
+        reservationService.reservar("tok-BM-RES-4", "BM-RES-4", linea(3));
         assertEquals(0, reservationService.disponibleDe(producto.getId()));
 
-        reservationService.liberar("BM-RES-4");
+        reservationService.liberar("tok-BM-RES-4");
 
         assertEquals(3, productRepository.stockDe(producto.getId()), "nunca salió del almacén");
         assertEquals(0, productRepository.reservadoDe(producto.getId()));
@@ -167,11 +167,11 @@ class ReservationServiceTest {
     @Test
     @DisplayName("una reserva caducada vuelve sola")
     void lasCaducadasVuelven() {
-        reservationService.reservar("BM-RES-5", linea(3));
+        reservationService.reservar("tok-BM-RES-5", "BM-RES-5", linea(3));
 
         // Se la envejece a mano: esperar quince minutos en un test no es
         // una opción, y lo que se prueba es el barrido, no el reloj.
-        StockReservation r = reservationRepository.findByOrderCode("BM-RES-5").get(0);
+        StockReservation r = reservationRepository.findByToken("tok-BM-RES-5").get(0);
         r.setExpiresAt(LocalDateTime.now().minusMinutes(1));
         reservationRepository.saveAndFlush(r);
 
@@ -185,11 +185,28 @@ class ReservationServiceTest {
     }
 
     @Test
+    @DisplayName("dos pedidos con el MISMO código no se pisan las reservas")
+    void elCodigoDePedidoNoEsLaLlave() {
+        // El código se genera antes de guardar el pedido, comprobando que no
+        // exista ya; dos checkouts a la vez pueden sacar el mismo número
+        // porque ninguno se ha guardado cuando el otro mira. Si la llave
+        // fuera el código, liberar uno devolvería las unidades del otro.
+        reservationService.reservar("tok-uno", "BM-20261017-1234", linea(1));
+        reservationService.reservar("tok-dos", "BM-20261017-1234", linea(1));
+        assertEquals(2, productRepository.reservadoDe(producto.getId()));
+
+        reservationService.liberar("tok-uno");
+
+        assertEquals(1, productRepository.reservadoDe(producto.getId()),
+                "liberar una reserva no puede soltar las unidades de la otra");
+    }
+
+    @Test
     @DisplayName("una venta sin reserva se descuenta como siempre")
     void sinReservaSeDescuentaDirecto() {
         // Es el caso de la caja: la mercancía se entrega en el acto, no hay
         // nada que apartar. Y el de los pedidos anteriores a las reservas.
-        int aplicadas = stockService.descontar(97L, "BM-SIN-RESERVA", linea(1));
+        int aplicadas = stockService.descontar(97L, null, linea(1));
 
         assertEquals(1, aplicadas);
         assertEquals(2, productRepository.stockDe(producto.getId()));

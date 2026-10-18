@@ -32,12 +32,16 @@ public class StockListener {
     public void alRecibir(Map<String, Object> evento) {
         String tipo = String.valueOf(evento.get("tipo"));
         String codigo = String.valueOf(evento.get("orderCode"));
+        // La llave de la reserva, si el pedido apartó stock. Los de caja y
+        // los anteriores a las reservas no la traen.
+        String token = evento.get("reservationToken") == null
+                ? null : String.valueOf(evento.get("reservationToken"));
         Long orderId = evento.get("orderId") == null ? null : Long.valueOf(evento.get("orderId").toString());
         List<Map<String, Object>> items = (List<Map<String, Object>>) evento.get("items");
 
         try {
             int aplicadas = switch (tipo) {
-                case "exit" -> stockService.descontar(orderId, codigo, items);
+                case "exit" -> stockService.descontar(orderId, token, items);
                 case "entry" -> stockService.devolver(orderId, items);
                 // Un tipo desconocido no se arregla reintentando: se aparta a
                 // la cola de fallidos en vez de reencolarse sin fin.
