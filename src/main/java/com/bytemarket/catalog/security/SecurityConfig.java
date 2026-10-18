@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,6 +37,20 @@ public class SecurityConfig {
             .formLogin(f -> f.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                /*
+                 * El cajero necesita LEER el catálogo para vender —la
+                 * pantalla de caja lista productos y busca por nombre— pero
+                 * no debe poder tocar nada de él. De ahí que se abra el GET
+                 * y no el resto.
+                 *
+                 * El orden importa: Spring se queda con la primera regla
+                 * que encaja.
+                 */
+                .requestMatchers(HttpMethod.GET, "/api/admin/products/**")
+                    .hasAnyRole("CAJERO", "JEFE_VENTAS", "ADMIN", "SUPERADMIN")
+                // El inventario lo consulta el jefe al cuadrar.
+                .requestMatchers(HttpMethod.GET, "/api/admin/inventory/**")
+                    .hasAnyRole("JEFE_VENTAS", "ADMIN", "SUPERADMIN")
                 .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
                 // Subir imágenes es solo del panel. En arigumi este endpoint
                 // es público, pero eso deja que cualquiera llene el bucket:
