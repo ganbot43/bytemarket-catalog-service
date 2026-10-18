@@ -40,7 +40,21 @@ public class ProductPresenter {
         // El frontend (useProductDisplay) lee comparePrice para pintar el
         // precio tachado; en la entidad el campo se llama discountPrice.
         map.put("comparePrice", p.getDiscountPrice());
-        map.put("stock", p.getStock());
+        /*
+         * Lo DISPONIBLE, no lo que hay en el almacén.
+         *
+         * Desde que existen las reservas, parte del stock puede estar
+         * comprometido con pedidos que se están cerrando. Enseñar la cifra
+         * bruta haría que la ficha dijera "quedan 43" y el checkout
+         * contestara "solo quedan 40" un segundo después: la tienda
+         * prometiendo algo que la caja rechaza.
+         *
+         * El almacén y lo vendible son dos preguntas distintas. Esta
+         * pantalla responde la segunda; la primera se ve en Inventario.
+         */
+        int enAlmacen = p.getStock() == null ? 0 : p.getStock();
+        int comprometido = p.getReserved() == null ? 0 : p.getReserved();
+        map.put("stock", Math.max(0, enAlmacen - comprometido));
         map.put("marca", p.getMarca());
         map.put("condicion", p.getCondicion());
         map.put("garantia", p.getGarantia());
