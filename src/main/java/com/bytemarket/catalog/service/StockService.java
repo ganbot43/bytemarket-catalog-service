@@ -73,15 +73,50 @@ public class StockService {
             if (p == null || p.getTrackStock() == null || p.getTrackStock() != 1) continue;
 
             int actual = p.getStock() == null ? 0 : p.getStock();
-            p.setStock(Math.max(0, actual + signo * cantidad));
-            productRepository.save(p);
+            int deltaPedido = signo * cantidad;
+            String razon = motivo;
+
+            /*
+             * El movimiento y la existencia tienen que contar lo mismo.
+             *
+             * Antes esto era `setStock(Math.max(0, actual + delta))` seguido
+             * de un save, y guardaba el movimiento con el delta COMPLETO.
+             * Con stock 2 y una venta de 5, la columna pasaba a 0 —se había
+             * movido 2— y el kardex anotaba -5. A partir de ahí el histórico
+             * dejaba de explicar la existencia, y nada lo avisaba: el recorte
+             * era invisible.
+             *
+             * Ahora la suma la hace la base de datos en un solo UPDATE, que
+             * además es atómico y cierra la carrera del "lee, suma, escribe".
+             * Si no cabe, se aplica lo que hay y el movimiento anota ESO,
+             * con el motivo diciendo que faltaron unidades.
+             */
+            int deltaAplicado = deltaPedido;
+            if (productRepository.moverStock(productId, deltaPedido) == 0) {
+                // No cupo: el stock se quedaría en negativo. Pasa cuando dos
+                // ventas se llevan la última unidad, porque validar y
+                // descontar no son el mismo instante.
+                deltaAplicado = -actual;
+                int faltan = cantidad - actual;
+                razon = motivo + " (faltaron " + faltan + ", stock insuficiente)";
+                log.error("Pedido {} producto {}: se pidieron {} unidades y solo había {}. "
+                                + "Se descuenta hasta cero y el kardex lo deja anotado.",
+                        orderId, productId, cantidad, actual);
+                if (deltaAplicado != 0) {
+                    productRepository.moverStock(productId, deltaAplicado);
+                }
+            }
+
+            // Un movimiento de cero no mueve nada: anotarlo solo ensucia el
+            // kardex. El log de arriba ya dejó constancia del intento.
+            if (deltaAplicado == 0) continue;
 
             InventoryMovement mov = new InventoryMovement();
             mov.setProduct(p);
             mov.setMovementType(tipo);
-            mov.setQuantity(cantidad);
-            mov.setDelta(signo * cantidad);
-            mov.setReason(motivo);
+            mov.setQuantity(Math.abs(deltaAplicado));
+            mov.setDelta(deltaAplicado);
+            mov.setReason(razon);
             mov.setRelatedOrderId(orderId);
             movementRepository.save(mov);
             aplicadas++;

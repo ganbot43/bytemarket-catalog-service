@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +19,30 @@ import com.bytemarket.catalog.model.Category;
 
 @Repository
 public interface IProductRepository extends JpaRepository<Product, Integer>, JpaSpecificationExecutor<Product> {
+
+    /**
+     * Mueve el stock en una sola operación de base de datos.
+     *
+     * Leer el stock, sumarle y guardarlo son tres pasos, y entre el primero
+     * y el tercero cabe otra venta: las dos leen 2, las dos escriben 1, y se
+     * ha vendido una unidad que no existía. Es la condición de carrera
+     * clásica del inventario, y no la arregla ninguna validación previa
+     * porque el hueco está DESPUÉS de validar.
+     *
+     * Aquí la suma la hace MySQL dentro del UPDATE, que es atómico: dos
+     * peticiones simultáneas se serializan solas.
+     *
+     * La condición `stock + :delta >= 0` es la otra mitad: si el movimiento
+     * dejaría el stock en negativo, no se aplica y devuelve 0 filas. Quien
+     * llama decide qué hacer con eso, pero se entera.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Product p SET p.stock = p.stock + :delta WHERE p.id = :id AND p.stock + :delta >= 0")
+    int moverStock(@Param("id") Integer id, @Param("delta") int delta);
+
+    /** Lo que de verdad hay ahora, releído tras un UPDATE atómico. */
+    @Query("SELECT COALESCE(p.stock, 0) FROM Product p WHERE p.id = :id")
+    Integer stockDe(@Param("id") Integer id);
 
     @EntityGraph(attributePaths = {"category", "images"})
     Optional<Product> findBySlug(String slug);

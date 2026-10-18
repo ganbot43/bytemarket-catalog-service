@@ -138,8 +138,33 @@ public class ApiAdminInventoryController {
             case "exit" -> -cantidad;
             default -> cantidad - actual;
         };
-        p.setStock(Math.max(0, actual + delta));
-        productRepository.save(p);
+
+        /*
+         * Una salida mayor que la existencia se rechaza, no se recorta.
+         *
+         * Antes era `setStock(Math.max(0, actual + delta))` y el movimiento
+         * guardaba el delta completo: sacar 5 de un stock de 2 dejaba la
+         * columna en 0 y el kardex anotando -5. El histórico dejaba de
+         * explicar la existencia y nadie se enteraba.
+         *
+         * Aquí no se recorta en silencio porque es una orden de una persona,
+         * no un mensaje de la cola: si quien ajusta se equivoca de número,
+         * lo que necesita es que se lo digan. Para una salida que de verdad
+         * supera lo registrado —mermas que nadie anotó— está "Conté el
+         * almacén", que fija la cifra real.
+         */
+        if (actual + delta < 0) {
+            return error(HttpStatus.CONFLICT,
+                    "No puedes sacar " + cantidad + " unidades: solo hay " + actual
+                            + ". Si el almacén dice otra cosa, usa 'Conté el almacén' para fijar la cifra real.");
+        }
+
+        // La suma la hace la base de datos: leer, sumar y guardar son tres
+        // pasos, y entre ellos cabe otra operación sobre el mismo producto.
+        if (productRepository.moverStock(p.getId(), delta) == 0 && delta != 0) {
+            return error(HttpStatus.CONFLICT,
+                    "El stock cambió mientras se guardaba. Vuelve a intentarlo.");
+        }
 
         InventoryMovement mov = new InventoryMovement();
         mov.setProduct(p);
