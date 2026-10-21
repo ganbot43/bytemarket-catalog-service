@@ -173,6 +173,7 @@ public class ApiAdminInventoryController {
         mov.setDelta(delta);
         mov.setReason(texto(dto.get("reason")));
         mov.setCreatedById(CurrentUser.get().map(u -> u.id()).orElse(null));
+        mov.setCreatedByName(CurrentUser.get().map(u -> u.name()).orElse(null));
         movementRepository.save(mov);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(dto(mov));
@@ -189,8 +190,14 @@ public class ApiAdminInventoryController {
         out.put("reason", m.getReason());
         out.put("relatedOrderId", m.getRelatedOrderId());
         out.put("createdBy", m.getCreatedById());
-        // El nombre del autor vive en user-service; el panel ya cae al id si falta.
-        out.put("createdByName", null);
+        out.put("createdByName", m.getCreatedByName());
+        /* Que no haya id significa que el movimiento no lo hizo una persona:
+           lo escribió el consumidor de la cola, sin petición ni JWT. Se
+           deriva aquí en vez de guardar un "Sistema" en la columna del
+           nombre, porque esa columna lleva nombres que el propio usuario
+           elige —y sin validación alguna—: un admin podría renombrarse
+           "Sistema" y hacer pasar un ajuste a mano por uno automático. */
+        out.put("createdBySystem", m.getCreatedById() == null);
         out.put("createdAt", m.getCreatedAt());
         return out;
     }

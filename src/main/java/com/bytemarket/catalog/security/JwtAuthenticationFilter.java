@@ -42,6 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 String email = claims.getSubject();
                 String role = claims.get("role", String.class);
+                String name = claims.get("name", String.class);
                 Object rawUid = claims.get("uid");
                 Long uid = rawUid instanceof Number n ? n.longValue() : null;
 
@@ -50,7 +51,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         : List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
 
                 UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(new AuthUser(uid, email, role), null, authorities);
+                        new UsernamePasswordAuthenticationToken(new AuthUser(uid, email, role, name), null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception e) {
                 // Token inválido o expirado: se continúa como anónimo

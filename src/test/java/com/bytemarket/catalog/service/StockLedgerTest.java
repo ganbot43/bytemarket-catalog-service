@@ -130,6 +130,26 @@ class StockLedgerTest {
     }
 
     @Test
+    @DisplayName("el movimiento de una venta no se atribuye a ninguna persona")
+    void laVentaNoTieneAutorHumano() {
+        stockService.descontar(5L, List.of(Map.of("productId", producto.getId(), "quantity", 1)));
+
+        InventoryMovement mov = movimientosDelProducto().stream().findFirst().orElseThrow();
+
+        // Lo escribe el consumidor de RabbitMQ: no hay petición HTTP ni JWT
+        // del que sacar un autor, así que las dos columnas quedan nulas y de
+        // ahí deduce el panel que fue automático.
+        assertNull(mov.getCreatedById(), "nadie hizo esto a mano");
+
+        // Y no se rellena con un centinela tipo "Sistema": el nombre lo
+        // elige cada usuario sin validación —ApiProfileController solo hace
+        // trim()—, así que un admin renombrado podría hacer pasar un ajuste
+        // manual por uno automático en la pantalla de auditoría.
+        assertNull(mov.getCreatedByName(),
+                "la columna del nombre es para personas; el caso automático se deduce del id");
+    }
+
+    @Test
     @DisplayName("la devolución por cancelación también cuadra")
     void cancelacionCuadra() {
         stockService.descontar(3L, List.of(Map.of("productId", producto.getId(), "quantity", 2)));
