@@ -13,15 +13,16 @@ import java.util.Map;
  * no haría efecto hasta que cerrara sesión, y una pantalla de permisos cuyos
  * cambios tardan un día en notarse se lee como que está rota.
  *
- * Su fallback NO relanza: devuelve vacío y PermissionsCache decide qué hacer
- * con eso. Que user-service esté caído no puede dejar el panel inservible,
- * pero tampoco puede abrir puertas: la política está documentada allí.
+ * NO tiene fallback a propósito. Con uno que devolvía un mapa vacío, "no
+ * contestó" y "contestó que nadie puede nada" llegaban idénticos a
+ * PermissionsCache, que entonces no podía distinguir un fallo de red de una
+ * respuesta autoritativa. Dejando que la llamada lance, el fallo es una
+ * excepción y una respuesta vacía es una respuesta.
  */
 @FeignClient(
         name = "bytemarket-user-service",
         contextId = "userPermissions",
-        path = "/api/internal",
-        fallback = UserPermissionsClientFallback.class)
+        path = "/api/internal")
 public interface UserPermissionsClient {
 
     @GetMapping("/permissions")
