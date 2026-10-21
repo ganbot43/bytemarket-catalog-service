@@ -29,7 +29,8 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtAuthenticationFilter jwtAuthFilter) throws Exception {
+                                                   JwtAuthenticationFilter jwtAuthFilter,
+                                                   ModuloAuthorizationManager porModulo) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.disable())
@@ -38,20 +39,23 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 /*
-                 * El cajero necesita LEER el catálogo para vender —la
-                 * pantalla de caja lista productos y busca por nombre— pero
-                 * no debe poder tocar nada de él. De ahí que se abra el GET
-                 * y no el resto.
+                 * Todo /api/admin lo decide la MATRIZ de permisos, no una
+                 * lista de roles escrita aquí.
                  *
-                 * El orden importa: Spring se queda con la primera regla
-                 * que encaja.
+                 * Antes había tres reglas en este bloque y la consecuencia
+                 * era que la pantalla de Roles y permisos solo escondía el
+                 * menú: quitarle Inventario a alguien no le cerraba la API, y
+                 * el 8082 está publicado en el compose, así que un curl desde
+                 * el host entraba igual.
+                 *
+                 * Qué módulo corresponde a cada ruta está en RutasDeModulo, y
+                 * el método decide si hace falta ver o editar. Lo que esas
+                 * tres reglas distinguían a mano —que el cajero LEE el
+                 * catálogo para vender pero no lo toca, y que el jefe
+                 * CONSULTA el inventario sin moverlo— sigue valiendo: es lo
+                 * que dicen los valores por defecto de la matriz.
                  */
-                .requestMatchers(HttpMethod.GET, "/api/admin/products/**")
-                    .hasAnyRole("CAJERO", "JEFE_VENTAS", "ADMIN", "SUPERADMIN")
-                // El inventario lo consulta el jefe al cuadrar.
-                .requestMatchers(HttpMethod.GET, "/api/admin/inventory/**")
-                    .hasAnyRole("JEFE_VENTAS", "ADMIN", "SUPERADMIN")
-                .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
+                .requestMatchers("/api/admin/**").access(porModulo)
                 // Subir imágenes es solo del panel. En arigumi este endpoint
                 // es público, pero eso deja que cualquiera llene el bucket:
                 // aquí se exige staff a propósito.

@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableDiscoveryClient
+@org.springframework.cloud.openfeign.EnableFeignClients
 // Sin esto el @Scheduled de ReservationService no se ejecuta nunca, y las
 // reservas que nadie confirma se quedan apartadas para siempre.
 @EnableScheduling
